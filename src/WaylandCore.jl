@@ -1,7 +1,17 @@
 module WaylandCore
 
+export WlInt, WlUInt, WlFixed, WlString, WlID, WlArray, WlFD, WlMsgType, TypeofWlMsgType
+
 using FixedPointNumbers
 using Sockets
+
+# Utility functions
+"""
+    typewrap(u)
+
+Get a Type Union that matches all types in u.
+"""
+typewrap(u) = u isa Union ? Union{Type{u.a}, typewrap(u.b)} : Type{u}
 
 # Native Wayland types
 # Opaque types
@@ -50,6 +60,12 @@ end
 # Utility types:
 const WlVersion = Int
 const WlMsgType = Union{WlInt,WlUInt,WlFixed,WlString,WlID,WlArray,WlFD} # message argument types
+"""
+    TypeofWlMsgType
+
+The type that matches all (and only) types in WlMsgType
+"""
+const TypeofWlMsgType = typewrap(WlMsgType)
 
 # Core functions
 """
