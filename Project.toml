@@ -1,0 +1,8 @@
+name = "WaylandCore"
+uuid = "dbf96336-f34e-11e8-1839-07066ae9385e"
+authors = ["Andrzej Korwin-Mikke <andrzej.kmikke@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+FixedPointNumbers = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
+Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
