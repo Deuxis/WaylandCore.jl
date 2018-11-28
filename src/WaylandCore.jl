@@ -1,6 +1,6 @@
 module WaylandCore
 
-export WlInt, WlUInt, WlFixed, WlString, WlID, WlArray, WlFD, WlMsgType, TypeofWlMsgType
+export WlVersion, WlInt, WlUInt, WlFixed, WlString, WlID, WlArray, WlFD, WlMsgType, TypeofWlMsgType
 
 using FixedPointNumbers
 using Sockets
