@@ -15,7 +15,7 @@ typewrap(u) = u isa Union ? Union{Type{u.a}, typewrap(u.b)} : Type{u}
 
 # Native Wayland types
 # Opaque types
-abstract type WlFD end
+const WlFD = RawFD
 
 # Primitives:
 const WlInt = Int32
@@ -54,7 +54,7 @@ The type that matches all (and only) types in WlMsgType
 """
 const TypeofWlMsgType = typewrap(WlMsgType)
 
-# High-level types
+# Library core types
 """
 	WaylandMessage
 
@@ -129,18 +129,22 @@ end
 """
     send(msg::Message, display::WaylandDisplay)
 
-Sends a message to the display.
+Send a message to a connection.
+
+A high-level API should instead create and use a method for its Display object.
 """
 function send(io::IO, msg::WaylandMessage)
-	push!(display.outqueue, msg)
+	write(io, msg)
 end
 """
-    receive(display::WaylandDisplay)
+    receive(io::IO, type::DataType)
 
-Receive a messege from a display. (Default queue)
+Receive a message of type `type` from a connection.
+
+A high-level API should instead create and use a method for its Display object.
 """
-function receive(display::WaylandDisplay)
-	popfirst!(display.inqueue)
+function receive(io::IO, type::DataType)
+	read(io, type)
 end
 
 end # module
