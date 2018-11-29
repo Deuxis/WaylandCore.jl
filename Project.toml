@@ -1,4 +1,4 @@
-name = "WaylandCore"
+name = "WaylandClientCore"
 uuid = "dbf96336-f34e-11e8-1839-07066ae9385e"
 authors = ["Andrzej Korwin-Mikke <andrzej.kmikke@gmail.com>"]
 version = "0.1.1"
