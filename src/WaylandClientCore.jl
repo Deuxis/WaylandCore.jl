@@ -56,11 +56,23 @@ const TypeofWlMsgType = typewrap(WlMsgType)
 
 # High-level types
 """
+	WaylandMessage
+
+Supertype for all messages.
+"""
+abstract type WaylandMessage end
+"""
+	WaylandMessage
+
+Supertype for all messages.
+"""
+abstract type ObjectMessage{T <: WaylandObject} <: WaylandMessage end
+"""
 	WaylandQueue
 
 A message queue. This is a parametric queue, that can be specialised to only hold a stricter subset of messages for optimization.
 """
-struct WaylandQueue where T <: WaylandMessage
+struct WaylandQueue{T <: WaylandMessage}
 	queue::Vector{T}
 end
 """
@@ -76,20 +88,17 @@ Supertype for all Wayland objects, in the Wayland spec meaning - things that imp
 """
 abstract type WaylandObject end
 """
-	struct WaylandDisplay
+	abstract type WaylandDisplay
 
-Global object representing the connection to the server.
+A display is alobal object representing the connection to the server. A high-level API should subtype this with its Display implementation.
 """
-struct WaylandDisplay <: WaylandObject
-	connection::Base.IO
-	outqueue::MessageQueue
-end
+abstract type WaylandDisplay <: WaylandObject end
 
-# Core functions
+# Core library-side functions.
 """
     connect(name::AbstractString)
 
-Connect to the named display.
+Connect to the named display. Returns a connection IO stream.
 """
 function connect(path::AbstractString)
 	path_isabsolute = path[1] == '/'
@@ -99,7 +108,7 @@ function connect(path::AbstractString)
 	elseif !path_isabsolute
 		path = runtimedir * '/' * path
 	end
-	WaylandDisplay(Sockets.connect(path))
+	Sockets.connect(path)
 end
 """
     connect()
@@ -108,19 +117,21 @@ Connect to default display, which is named in "WAYLAND_DISPLAY" env variable. If
 """
 connect() = connect(get(ENV, "WAYLAND_DISPLAY", "wayland-0"))
 """
-    disconnect(display::WaylandDisplay)
+    disconnect(connection::IO)
 
-Disconnects from the display.
+Disconnect from a connection.
+
+A high-level API should instead create and use a method for its Display object.
 """
-function disconnect(display::WaylandDisplay)
-	close(display.connection)
+function disconnect(connection::IO)
+	close(connection)
 end
 """
     send(msg::Message, display::WaylandDisplay)
 
-Sends a message to a display. (Default queue)
+Sends a message to the display.
 """
-function send(msg::WaylandMessage, display::WaylandDisplay)
+function send(io::IO, msg::WaylandMessage)
 	push!(display.outqueue, msg)
 end
 """
