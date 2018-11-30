@@ -1,2 +1,2 @@
-# WaylandClientCore.jl
-Core Wayland client functionality for Julia - connecting, datatypes, the like.
+# WaylandCore.jl
+Core Wayland functionality for Julia - connecting, datatypes, messages the like.

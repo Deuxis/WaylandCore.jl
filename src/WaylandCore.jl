@@ -1,4 +1,4 @@
-module WaylandClientCore
+module WaylandCore
 
 export WlVersion, WlInt, WlUInt, WlFixed, WlString, WlID, WlArray, WlFD, WlMsgType, TypeofWlMsgType
 
