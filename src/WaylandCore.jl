@@ -1,6 +1,7 @@
 module WaylandCore
 
-export WlVersion, WlInt, WlUInt, WlFixed, WlString, WlID, WlArray, WlFD, WlMsgType, TypeofWlMsgType
+"Message types and meta-types"
+export WlVersion, WlInt, WlUInt, WlFixed, WlString, WlID, WlArray, WlFD, WlMsgType, TypeofWlMsgType, AbstractWlMsgType, TypeofAbstractWlMsgType
 
 import Sockets, Base.read, Base.write
 using FixedPointNumbers
