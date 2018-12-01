@@ -1,6 +1,5 @@
 module WaylandCore
 
-"Message types and meta-types"
 export WlVersion, WlInt, WlUInt, WlFixed, WlString, WlID, WlArray, WlFD, WlMsgType, TypeofWlMsgType, AbstractWlMsgType, TypeofAbstractWlMsgType
 
 import Sockets, Base.read, Base.write
@@ -168,13 +167,13 @@ Read a WlString.
 function read(io::IO, ::Type{WlString})
 	length = read(io, WlUInt)
 	contents = Array{Cchar}()
-	for 1:length - 1 # length includes the terminating NUL, which we don't care about
+	for i in 1:length - 1 # length includes the terminating NUL, which we don't care about
 		push!(contents, read(io, Cchar))
 	end
 	# Pull the terminating NUL and assert it's actually NUL
 	@assert read(io, UInt8) == 0 "Last byte of string not actually NUL!"
 	# Now pull the padding
-	for 1:length % 4
+	for i in 1:length % 4
 		read(io, UInt8) # We don't care about padding contents, they are undefined anyway, we just want them out of the stream.
 	end
 end
