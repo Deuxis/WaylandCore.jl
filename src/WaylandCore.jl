@@ -135,6 +135,12 @@ abstract type WaylandMessage end
 An interface for looking up argument types. Contains a vector of message argument types in the order they should be received in. Anything implementing it should at least define getindex(x, id::UInt32, opcode::UInt16).
 """
 abstract type LookupTable end
+#="""
+	(::Type{<: WaylandMessage})(from::WlID, size::UInt16, opcode::UInt16)
+
+Constructor with an empty payload for any message, which can accept `nothing` as payload.
+"""
+(type::Type{<: WaylandMessage})(from::WlID, size::UInt16, opcode::UInt16) = type(from, size, opcode, nothing)=#
 """
 	struct GenericMessage
 
@@ -186,12 +192,6 @@ struct VectorMessage <: WaylandMessage
 end
 VectorMessage(from::WlID, size::UInt16, opcode::UInt16) = VectorMessage(from, size, opcode, nothing)
 """
-	ObjectMessage
-
-A message with a source/target object.
-"""
-abstract type ObjectMessage{object <: WaylandObject} <: WaylandMessage end
-"""
 	WaylandQueue
 
 A message queue. This is a parametric queue, that can be specialised to only hold a stricter subset of messages for optimization.
@@ -205,17 +205,11 @@ end
 A generic message queue able to hold any messages.
 """
 const MessageQueue = WaylandQueue{WaylandMessage}
-"""
-	abstract type WaylandObject
-
-Supertype for all Wayland objects, in the Wayland spec meaning - things that implement interfaces and you can exchange messages with them.
-"""
-abstract type WaylandObject end
 
 # Core library-side functions.
 # Binary I/O methods:
 """
-    write(io::IO, msg::VectorMessage)
+    write(io::IO, msg::WaylandMessage)
 
 Write any `WaylandMessage` to the io. This requires a `GenericMessage(msg)` compatible constructor to exist.
 """
