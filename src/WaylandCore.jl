@@ -250,7 +250,7 @@ VectorMessage(from::WlID, size::UInt16, opcode::UInt16) = VectorMessage(from, si
 
 abstract type AbstractQueue end
 """
-	WaylandQueue
+	GenericQueue
 
 A message queue. This is a parametric queue, that can be specialised to only hold a stricter subset of messages for optimization.
 """
@@ -262,7 +262,7 @@ end
 
 A generic message queue able to hold any messages.
 """
-const MessageQueue = WaylandQueue{WaylandMessage}
+const MessageQueue = GenericQueue{WaylandMessage}
 
 # Core library-side functions.
 # Binary I/O methods:
