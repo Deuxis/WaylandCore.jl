@@ -19,26 +19,41 @@ typewrap(u) = u isa Union ? Union{Type{u.a}, typewrap(u.b)} : Type{u}
 """
 	WlObjID
 
-Describes a WlID argument which represents an existing object.
+Describes a [`WlID`](@ref) argument which represents an existing object. (The "object" wayland protocol type.)
 """
 abstract type WlObjID end
 """
 	WlNewID
 
-Describes a WlID argument which will represent a new object.
+Describes a [`WlID`](@ref) argument which will represent a new object. (The "new_id" wayland protocol type.)
 """
 abstract type WlNewID end
 
 # Opaque types
+"""
+	WlFD
+
+A file descriptor, corresponds to "fd" wayland protocol type.
+"""
 const WlFD = RawFD
 
 # Primitives:
-const WlInt = Int32
+"""
+	WlUInt
+
+Generic wayland message 32-bit word. Corresponds to "uint" wayland protocol type.
+"""
 const WlUInt = UInt32
+"""
+	WlInt
+
+The "int" wayland message argument type.
+"""
+const WlInt = Int32
 """
 	WlID
 
-The actual ID type, corresponding to "object" and "new_id" protocol types.
+The actual ID type, corresponding to "object" and "new_id" wayland protocol types.
 """
 const WlID = WlUInt # Object ID
 """
@@ -46,21 +61,44 @@ const WlID = WlUInt # Object ID
 
 24.8 signed fixed-point number based on Int32
 1 sign bit, 23 bits integer prexision, 8 bits decimal precision
+Corresponds to "fixed" wayland protocol type.
+
+See also: [`Fixed`](@ref)
 """
 const WlFixed = Fixed{Int32,8}
 
 # Transparent types:
+"""
+	WlArray{T}
+
+Direct representation of the "array" wayland protocol type.
+"""
 struct WlArray{T}
-	size::WlInt # size of content in bytes
+	size::WlUInt # size of (only, excluding the size) content in bytes
 	content::Vector{T} # the content including padding to 32-bit boundary
 end
+"""
+	WlByteArray
+
+A [`WlArray`](@ref) containing generic bytes.
+"""
 const WlByteArray = WlArray{UInt8}
+"""
+	WlString
+
+Direct representation of the "string" wayland protocol type.
+"""
 struct WlString
-	length::WlInt
+	length::WlUInt
 	content::Vector{Cchar} # the content of the string including NUL terminator and padding to 32-bit boundary
 end
 
 # Meta types
+"""
+	WlVersion
+
+The type used to denote interfaces' and their members' versions.
+"""
 const WlVersion = Int
 """
 	AbstractWlMsgType
@@ -109,7 +147,7 @@ end
 
 Read a WlArray of type T.
 """
-function read(io::IO, ::WlArray{T}) where T
+function read(io::IO, ::Type{WlArray{T}}) where T
 	size = read(io, UInt32)
 	if size == 0
 		WlArray(size, [])
@@ -120,6 +158,24 @@ function read(io::IO, ::WlArray{T}) where T
 			push!(vec, read(io, UInt8))
 		end
 		WlArray(size, vec)
+	end
+end
+"""
+    read(io::IO, ::Type{WlString})
+
+Read a WlString.
+"""
+function read(io::IO, ::Type{WlString})
+	length = read(io, WlUInt)
+	contents = Array{Cchar}()
+	for 1:length - 1 # length includes the terminating NUL, which we don't care about
+		push!(contents, read(io, Cchar))
+	end
+	# Pull the terminating NUL and assert it's actually NUL
+	@assert read(io, UInt8) == 0 "Last byte of string not actually NUL!"
+	# Now pull the padding
+	for 1:length % 4
+		read(io, UInt8) # We don't care about padding contents, they are undefined anyway, we just want them out of the stream.
 	end
 end
 
@@ -312,7 +368,7 @@ Disconnect from a connection.
 A high-level API should instead create and use a method for its Display object.
 """
 function disconnect(connection::IO)
-	close(connection)
+	Sockets.close(connection)
 end
 """
     send(io::IO, msg::WaylandMessage)
