@@ -16,13 +16,13 @@ typewrap(u) = u isa Union ? Union{Type{u.a}, typewrap(u.b)} : Type{u}
 # Native Wayland types
 # Abstract types:
 """
-	abstract type WlObjID
+	WlObjID
 
 Describes a WlID argument which represents an existing object.
 """
 abstract type WlObjID end
 """
-	abstract type WlNewID
+	WlNewID
 
 Describes a WlID argument which will represent a new object.
 """
@@ -142,7 +142,7 @@ Constructor with an empty payload for any message, which can accept `nothing` as
 """
 (type::Type{<: WaylandMessage})(from::WlID, size::UInt16, opcode::UInt16) = type(from, size, opcode, nothing)=#
 """
-	struct GenericMessage
+	GenericMessage
 
 A generic, low-level message. Directly corresponds to the wayland wire format spec, using IOBuffer as storage. Inner constructor enforces padding to 32-bit word boundary.
 """
@@ -180,7 +180,7 @@ function GenericMessage(msg::WaylandMessage)
 	GenericMessage(msg.from, msg.size, msg.opcode, msg.payload)
 end
 """
-	struct VectorMessage
+	VectorMessage
 
 A generic, low-level message. Uses Vector{WlMsgType} to store arguments.
 """
