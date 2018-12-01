@@ -248,12 +248,14 @@ struct VectorMessage <: WaylandMessage
 	payload::Union{Vector{WlMsgType}, Nothing} # Stored arguments. Need to be aligned to 32-bit word boundary by write()
 end
 VectorMessage(from::WlID, size::UInt16, opcode::UInt16) = VectorMessage(from, size, opcode, nothing)
+
+abstract type AbstractQueue end
 """
 	WaylandQueue
 
 A message queue. This is a parametric queue, that can be specialised to only hold a stricter subset of messages for optimization.
 """
-struct WaylandQueue{T <: WaylandMessage}
+struct GenericQueue{T <: WaylandMessage} <: AbstractQueue
 	queue::Vector{T}
 end
 """
@@ -374,6 +376,8 @@ end
     send(io::IO, msg::WaylandMessage)
 
 Send a message to a connection.
+
+A high-level API should instead create and use a method for its Display object.
 """
 function send(io::IO, msg::WaylandMessage)
 	write(io, msg)
@@ -382,6 +386,8 @@ end
     receive(io::IO, type::DataType)
 
 Receive a message of type `type` from a connection.
+
+A high-level API should instead create and use a method for its Display object.
 """
 function receive(io::IO, type::Type{<: WaylandMessage})
 	read(io, type)
