@@ -1,2 +1,4 @@
 # WaylandCore.jl
-Core Wayland functionality for Julia - connecting, datatypes, messages the like.
+Core Wayland shared between client- and server-side functionality for Julia - connecting, passing messages, message-level types.
+
+Unstable, but unlikely to introduce breaking changes.
