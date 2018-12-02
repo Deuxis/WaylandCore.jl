@@ -1,3 +1,8 @@
+"""
+	WaylandCore
+
+Provides basic Wayland functionality shared between client- and server-side. Connecting, passing messages, message-level types.
+"""
 module WaylandCore
 
 export WlVersion, WlInt, WlUInt, WlFixed, WlString, WlID, WlNewID, WlObjID, WlArray, WlFD, WlMsgType, TypeofWlMsgType, AbstractWlMsgType, TypeofAbstractWlMsgType
@@ -9,7 +14,7 @@ using FixedPointNumbers
 """
     typewrap(u)
 
-Get a Type Union that matches all types in u.
+Get a Type Union that matches all types in `u`.
 """
 typewrap(u) = u isa Union ? Union{Type{u.a}, typewrap(u.b)} : Type{u}
 
@@ -224,7 +229,17 @@ struct GenericMessage <: WaylandMessage
 		end
 	end
 end
+"""
+	GenericMessage(from::WlID, size::UInt16, opcode::UInt16)
+
+Constructor for messages with no payload.
+"""
 GenericMessage(from::WlID, size::UInt16, opcode::UInt16) = GenericMessage(from, size, opcode, nothing)
+"""
+	GenericMessage(from::WlID, size::UInt16, opcode::UInt16, iterable)
+
+Constructor using an iterable collection as source of arguments.
+"""
 function GenericMessage(from::WlID, size::UInt16, opcode::UInt16, iterable)
 	buf = IOBuffer()
 	for value in iterable
@@ -232,6 +247,11 @@ function GenericMessage(from::WlID, size::UInt16, opcode::UInt16, iterable)
 	end
 	GenericMessage(from, size, opcode, buf)
 end
+"""
+	GenericMessage(msg::WaylandMessage)
+
+Constructor from any compliant WaylandMessage.
+"""
 function GenericMessage(msg::WaylandMessage)
 	GenericMessage(msg.from, msg.size, msg.opcode, msg.payload)
 end
