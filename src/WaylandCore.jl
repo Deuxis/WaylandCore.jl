@@ -19,20 +19,6 @@ Get a Type Union that matches all types in `u`.
 typewrap(u) = u isa Union ? Union{Type{u.a}, typewrap(u.b)} : Type{u}
 
 # Native Wayland types
-# Abstract types:
-"""
-	WlObjID
-
-Describes a [`WlID`](@ref) argument which represents an existing object. (The "object" wayland protocol type.)
-"""
-abstract type WlObjID end
-"""
-	WlNewID
-
-Describes a [`WlID`](@ref) argument which will represent a new object. (The "new_id" wayland protocol type.)
-"""
-abstract type WlNewID end
-
 # Opaque types
 """
 	WlFD
@@ -55,11 +41,23 @@ The "int" wayland message argument type.
 """
 const WlInt = Int32
 """
+	WlObjID
+
+Describes a [`WlID`](@ref) argument which represents an existing object. (The "object" wayland protocol type.)
+"""
+const WlObjID = WlUInt
+"""
+	WlNewID
+
+Describes a [`WlID`](@ref) argument which will represent a new object. (The "new_id" wayland protocol type.)
+"""
+const WlNewID = WlUInt
+"""
 	WlID
 
-The actual ID type, corresponding to "object" and "new_id" wayland protocol types.
+Either [`WlObjID`](@ref) or [`WlNewID`](@ref) type, as their differences are purely semantic.
 """
-const WlID = WlUInt # Object ID
+const WlID = Union{WlObjID, WlNewID}
 """
     WlFixed
 
@@ -129,6 +127,31 @@ The type that matches all (and only) types in AbstractWlMsgType
 """
 const TypeofAbstractWlMsgType = typewrap(AbstractWlMsgType)
 
+# sendmsg- & recvmsg-based message passing:
+const ByteBuffer = Vector{UInt8}
+struct Ciovec
+	iov_base::ByteBuffer # Gets passed as a pointer to the buffer.
+	iov_len::Csize_t
+end
+"""
+	Cmsghdr
+
+Corresponds to `struct msghdr` from `socket.h`.
+"""
+struct Cmsghdr
+	msg_name # Never used, will be C_NULL
+	msg_namelen # Never used, will be 0
+	msg_iov::Vector{Ciovec}
+	msg_iovlen::Csize_t # Count of msg_iov elements.
+	msg_control::ByteBuffer # Buffer for control messages
+	msg_controllen::Csize_t # Byte length of msg_control
+	msg_flags::Int # Flags of the returned message
+end
+"Constructor for a simple control message."
+Cmessage(control::Ref, controllen::Csize_t, flags::Int = 0) = Cmessage(C_NULL, 0, C_NULL, 0, control, controllen, flags)
+"Constructor for a control message from vector."
+Cmessage(vec::Vector{T}) where T = Cmessage(Ref(vec), length(vec) * sizeof(T))
+
 # Core type methods
 """
     read(io::IO, ::Type{WlByteArray})
@@ -185,6 +208,12 @@ end
 
 # Library core types
 """
+	WaylandConnection
+
+A connection that is able to receive all Wayland messages. Currently only a Unix domain socket.
+"""
+const WaylandConnection = Sockets.PipeEndpoint
+"""
 	WaylandMessage
 
 Supertype for all messages.
@@ -196,16 +225,19 @@ abstract type WaylandMessage end
 An interface for looking up argument types. Contains a vector of message argument types in the order they should be received in. Anything implementing it should at least define getindex(x, id::UInt32, opcode::UInt16).
 """
 abstract type LookupTable end
-#="""
+#= GenericMessage seems to not be compatible with passing FDs.
+"""
 	(::Type{<: WaylandMessage})(from::WlID, size::UInt16, opcode::UInt16)
 
 Constructor with an empty payload for any message, which can accept `nothing` as payload.
 """
-(type::Type{<: WaylandMessage})(from::WlID, size::UInt16, opcode::UInt16) = type(from, size, opcode, nothing)=#
+(type::Type{<: WaylandMessage})(from::WlID, size::UInt16, opcode::UInt16) = type(from, size, opcode, nothing)
 """
 	GenericMessage
 
 A generic, low-level message. Directly corresponds to the wayland wire format spec, using IOBuffer as storage. Inner constructor enforces padding to 32-bit word boundary.
+
+**Do not** use for messages including file descriptors as they are passed with special calls on the socket and will be lost and introduce binary corruption if processed as just data.
 """
 struct GenericMessage <: WaylandMessage
 	from::WlID
@@ -253,8 +285,11 @@ end
 Constructor from any compliant WaylandMessage.
 """
 function GenericMessage(msg::WaylandMessage)
+	if WlObjID in msg.payload || WlNewID in msg.payload || WlID in msg.payload
+		throw(ArgumentError("GenericMessage cannot be used with file descriptors!"))
+	end
 	GenericMessage(msg.from, msg.size, msg.opcode, msg.payload)
-end
+end=#
 """
 	VectorMessage
 
@@ -285,7 +320,24 @@ A generic message queue able to hold any messages.
 const MessageQueue = GenericQueue{WaylandMessage}
 
 # Core library-side functions.
-# Binary I/O methods:
+"""
+    read(io::Sockets.PipeEndpoint, ::Type{RawFD})
+
+Read a file descriptor from a Unix domain socket.
+
+FDs are only representations of open files, think references, and passing them through IO as binary data would mean nothing. (Like passing a pointer to not owned memory.) They can only be passed via a Unix domain socket using the special ancillary (control) data of the socket. In Linux, which is currently the only target, this is done using recvmsg system call, which is contained in libc.
+
+The server shouldn't pass anything else in the ancillary.
+"""
+function read(io::Sockets.PipeEndpoint, ::Type{RawFD})
+	msg = Cmessage(resize!(Vector{Int}(), 4))
+	retsize = ccall(:recvmsg, Cssize_t, (RawFD, Ref{Cmessage}, Cint), fd(io), Ref(msg), flags)
+	if retsize != sizeof(Int) * 4
+		error("Received wrong size data.")
+	end
+end
+#= Commented out because they're currently incompatible with passing FDs.
+# Message I/O methods:
 """
     write(io::IO, msg::WaylandMessage)
 
@@ -309,7 +361,7 @@ end
 """
     read(io::IO, ::Type{GenericMessage})
 
-Read a `GenericMessage`.
+Read a `GenericMessage`. **Do not** use this for messages including file descriptors as they are passed with special calls on the socket and will not be read.
 """
 function read(io::IO, ::Type{GenericMessage})
 	from = read(io, WlID)
@@ -358,7 +410,7 @@ function read(io::IO, ::Type{VectorMessage}, lookup::LookupTable)
 		end
 	end
 	VectorMessage(from, size, opcode, payload)
-end
+end=#
 # Connection and I/O
 """
     connect(name::AbstractString)
@@ -367,8 +419,8 @@ Connect to the named display. Returns a connection IO stream.
 """
 function connect(path::AbstractString)
 	path_isabsolute = path[1] == '/'
-	runtimedir = get(ENV, "XDG_RUNTIME_DIR", false)
-	if !path_isabsolute && !runtimedir
+	runtimedir = get(ENV, "XDG_RUNTIME_DIR", nothing)
+	if runtimedir == nothing && !path_isabsolute
 		throw(ArgumentError("Cannot connect - XDG_RUNTIME_DIR is unset and non-absolute path was provided!"))
 	elseif !path_isabsolute
 		path = runtimedir * '/' * path
