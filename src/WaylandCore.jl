@@ -10,13 +10,15 @@ export WlVersion, WlInt, WlUInt, WlFixed, WlString, WlID, WlNewID, WlObjID, WlAr
 import Sockets, Base.read, Base.write
 using FixedPointNumbers
 
-# Utility functions
+# Utility
 """
     typewrap(u)
 
 Get a Type Union that matches all types in `u`.
 """
 typewrap(u) = u isa Union ? Union{Type{u.a}, typewrap(u.b)} : Type{u}
+
+const ByteBuffer = Vector{UInt8}
 
 # Native Wayland types
 # Opaque types
@@ -126,31 +128,80 @@ const TypeofWlMsgType = typewrap(WlMsgType)
 The type that matches all (and only) types in AbstractWlMsgType
 """
 const TypeofAbstractWlMsgType = typewrap(AbstractWlMsgType)
+"""
+	WaylandConnection
+
+A connection that is able to receive all Wayland messages. Currently only a Unix domain socket.
+"""
+const WaylandConnection = Sockets.PipeEndpoint
 
 # sendmsg- & recvmsg-based message passing:
-const ByteBuffer = Vector{UInt8}
+const Csocklen_t = Cint
+const default_outer_flags = 0
+const default_inner_flags = 0
+"""
+	Ciovec
+
+Corresponds to `struct iovec` from `uio.h`.
+"""
 struct Ciovec
 	iov_base::ByteBuffer # Gets passed as a pointer to the buffer.
-	iov_len::Csize_t
+	iov_len::Csize_t # Byte length of `iov_base`.
 end
+"Constructor from a DenseVector{UInt8}, which knows its length"
+Ciovec(vec::DenseVector{UInt8}) = Ciovec(vec, length(vec))
 """
 	Cmsghdr
 
 Corresponds to `struct msghdr` from `socket.h`.
 """
 struct Cmsghdr
-	msg_name # Never used, will be C_NULL
-	msg_namelen # Never used, will be 0
-	msg_iov::Vector{Ciovec}
+	msg_name::Ref{Cvoid} # The socket name if given socket is not connected. Never used, will be `C_NULL`
+	msg_namelen::Csocklen_t # Length of `msg_name`. Never used, will be `0`
+	msg_iov::DenseVector{Ciovec} # Vector of `Ciovec`s, which each represent a normal data buffer.
 	msg_iovlen::Csize_t # Count of msg_iov elements.
 	msg_control::ByteBuffer # Buffer for control messages
 	msg_controllen::Csize_t # Byte length of msg_control
-	msg_flags::Int # Flags of the returned message
+	msg_flags::Cint # Flags of the returned message
 end
-"Constructor for a simple control message."
-Cmessage(control::Ref, controllen::Csize_t, flags::Int = 0) = Cmessage(C_NULL, 0, C_NULL, 0, control, controllen, flags)
-"Constructor for a control message from vector."
-Cmessage(vec::Vector{T}) where T = Cmessage(Ref(vec), length(vec) * sizeof(T))
+"Constructor without socket name and with optional flags."
+function Cmsghdr(iov::DenseVector{Ciovec}, iovlen::Csize_t, control::DenseVector{UInt8}, controllen::Csize_t, flags::Cint = default_inner_flags)
+	Cmsghdr(C_NULL, 0, iov, iovlen, control, controllen, flags)
+end
+"Constructor from `DenseVector`s, which know their length."
+function Cmsghdr(iov::DenseVector{Ciovec}, control::DenseVector{UInt8}, flags::Cint = default_inner_flags)
+	Cmsghdr(iov, length(iov), control, length(control), flags)
+end
+
+"""
+    send(io::WaylandConnection, msg::Cmsghdr, flags::Cint = default_outer_flags)
+
+The lowest level message sending mechanism, thin wrapper around `sendmsg` syscall.
+"""
+function send(io::WaylandConnection, msg::Cmsghdr, flags::Cint = default_outer_flags)
+	ret = ccall(:sendmsg, Cssize_t,
+	(RawFD, Ref{Cmsghdr}, Cint),
+	fd(io), Ref(msg), flags)
+	if ret == -1
+		error("An error occured.") # TODO: what error?
+	end
+end
+"""
+    receive(io::WaylandConnection, msg::Cmsghdr, flags::Cint = default_outer_flags)
+
+The lowest level message receiving mechanism, thin wrapper around `recvmsg` syscall.
+"""
+function receive(io::WaylandConnection, msg::Cmsghdr, flags::Cint = default_outer_flags)
+	ret = ccall(:recvmsg, Cssize_t,
+	(RawFD, Ref{Cmsghdr}, Cint),
+	fd(io), Ref(msg), flags)
+	if ret == 0
+		# Server has shut down.
+	elseif ret == -1
+		error("An error occured.") # TODO: what error?
+	end
+	return ret
+end
 
 # Core type methods
 """
@@ -208,17 +259,26 @@ end
 
 # Library core types
 """
-	WaylandConnection
-
-A connection that is able to receive all Wayland messages. Currently only a Unix domain socket.
-"""
-const WaylandConnection = Sockets.PipeEndpoint
-"""
 	WaylandMessage
 
 Supertype for all messages.
 """
 abstract type WaylandMessage end
+"""
+	BufferedMessage
+
+Medium level, between high level messages and low level wrapped syscalls.
+"""
+struct BufferedMessage <: WaylandMessage
+	from::UInt32
+	opcode::UInt16
+	size::UInt16
+	payload::ByteBuffer
+	ancillary::ByteBuffer
+end
+function receive(io::WaylandConnection, ::Type{BufferedMessage})
+	body
+end
 """
 	LookupTable
 
@@ -320,22 +380,6 @@ A generic message queue able to hold any messages.
 const MessageQueue = GenericQueue{WaylandMessage}
 
 # Core library-side functions.
-"""
-    read(io::Sockets.PipeEndpoint, ::Type{RawFD})
-
-Read a file descriptor from a Unix domain socket.
-
-FDs are only representations of open files, think references, and passing them through IO as binary data would mean nothing. (Like passing a pointer to not owned memory.) They can only be passed via a Unix domain socket using the special ancillary (control) data of the socket. In Linux, which is currently the only target, this is done using recvmsg system call, which is contained in libc.
-
-The server shouldn't pass anything else in the ancillary.
-"""
-function read(io::Sockets.PipeEndpoint, ::Type{RawFD})
-	msg = Cmessage(resize!(Vector{Int}(), 4))
-	retsize = ccall(:recvmsg, Cssize_t, (RawFD, Ref{Cmessage}, Cint), fd(io), Ref(msg), flags)
-	if retsize != sizeof(Int) * 4
-		error("Received wrong size data.")
-	end
-end
 #= Commented out because they're currently incompatible with passing FDs.
 # Message I/O methods:
 """
@@ -442,26 +486,6 @@ A high-level API should instead create and use a method for its Display object.
 """
 function disconnect(connection::IO)
 	Sockets.close(connection)
-end
-"""
-    send(io::IO, msg::WaylandMessage)
-
-Send a message to a connection.
-
-A high-level API should instead create and use a method for its Display object.
-"""
-function send(io::IO, msg::WaylandMessage)
-	write(io, msg)
-end
-"""
-    receive(io::IO, type::DataType)
-
-Receive a message of type `type` from a connection.
-
-A high-level API should instead create and use a method for its Display object.
-"""
-function receive(io::IO, type::Type{<: WaylandMessage})
-	read(io, type)
 end
 
 end # module
