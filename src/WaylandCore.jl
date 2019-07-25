@@ -5,7 +5,7 @@ Provides basic Wayland functionality shared between client- and server-side. Con
 """
 module WaylandCore
 
-export WlVersion, WlInt, WlUInt, WlFixed, WlString, WlID, WlNewID, WlObjID, WlArray, WlFD, WlMsgType, TypeofWlMsgType, AbstractWlMsgType, TypeofAbstractWlMsgType
+export WlVersion, WlInt, WlUInt, WlFixed, WlString, WlID, WlNewID, WlObjID, WlArray, WlFD, WlMsgType, TypeofWlMsgType
 
 import Sockets, Base.read, Base.write
 using FixedPointNumbers
@@ -43,23 +43,23 @@ The "int" wayland message argument type.
 """
 const WlInt = Int32
 """
+	WlID
+
+Either [`WlObjID`](@ref) or [`WlNewID`](@ref) type, as their differences are purely semantic.
+"""
+const WlID = WlUInt
+"""
 	WlObjID
 
 Describes a [`WlID`](@ref) argument which represents an existing object. (The "object" wayland protocol type.)
 """
-const WlObjID = WlUInt
+const WlObjID = WlID
 """
 	WlNewID
 
 Describes a [`WlID`](@ref) argument which will represent a new object. (The "new_id" wayland protocol type.)
 """
-const WlNewID = WlUInt
-"""
-	WlID
-
-Either [`WlObjID`](@ref) or [`WlNewID`](@ref) type, as their differences are purely semantic.
-"""
-const WlID = Union{WlObjID, WlNewID}
+const WlNewID = WlID
 """
     WlFixed
 
@@ -105,29 +105,17 @@ The type used to denote interfaces' and their members' versions.
 """
 const WlVersion = Int
 """
-	AbstractWlMsgType
-
-Represents any message argument's semantic type.
-"""
-const AbstractWlMsgType = Union{WlInt, WlUInt, WlFixed, WlString, WlNewID, WlObjID, WlArray, WlFD}
-"""
 	WlMsgType
 
-Represents any message argument's concrete type.
+Represents any message argument type.
 """
-const WlMsgType = Union{WlInt, WlUInt, WlFixed, WlString, WlID, WlArray, WlFD} # message argument types
+const WlMsgType = Union{WlInt, WlUInt, WlFixed, WlString, WlNewID, WlObjID, WlArray, WlFD}
 """
     TypeofWlMsgType
 
 The type that matches all (and only) types in WlMsgType
 """
 const TypeofWlMsgType = typewrap(WlMsgType)
-"""
-    TypeofAbstractWlMsgType
-
-The type that matches all (and only) types in AbstractWlMsgType
-"""
-const TypeofAbstractWlMsgType = typewrap(AbstractWlMsgType)
 """
 	WaylandConnection
 
