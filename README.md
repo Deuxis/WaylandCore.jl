@@ -1,4 +1,4 @@
-# WaylandCore.jl
+# [ABANDONED] WaylandCore.jl
 Core Wayland shared between client- and server-side functionality for Julia - connecting, passing messages, message-level types.
 
-Horribly broken because it cannot send/receive FDs. For the meanwhile I've switched to a libwayland-client wrapper for the core functionality, but I will probably return to this.
+This was a side project I abandoned due to mounting difficulties and the realisation that bindings for the C library are simply more sensible to do at the moment. Leaving it as-is in case it helps someone.
